@@ -57,6 +57,8 @@ func init() {
 	if err := srv.GetConfig().LoadFromFile(); err != nil {
 		log.Fatal(err)
 	}
+
+	srv.InitParquet()
 }
 
 func redirect(w http.ResponseWriter, r *http.Request) {
@@ -126,6 +128,7 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+	defer srv.CloseParquet()
 
 	log.Println("Starting server...")
 	log.Println("Listening on " + srv.GetConfig().Host + ":" + srv.GetConfig().TLSPort)

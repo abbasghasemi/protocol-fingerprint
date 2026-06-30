@@ -185,6 +185,13 @@ type Config struct {
 	Device       string `json:"device"`
 	CorsKey      string `json:"cors_key"`
 	EnableQUIC   bool   `json:"enable_quic"`
+
+	// LogToParquet enables persisting captured fingerprints to Parquet files.
+	LogToParquet bool `json:"log_to_parquet"`
+	// ParquetDir is the directory the Parquet files are written to.
+	ParquetDir string `json:"parquet_dir"`
+	// ParquetLogIPs controls whether the client IP is stored in the Parquet rows.
+	ParquetLogIPs bool `json:"parquet_log_ips"`
 }
 
 func (c *Config) LoadFromFile() error {
@@ -209,6 +216,12 @@ func (c *Config) LoadFromFile() error {
 	c.Device = tmp.Device
 	c.CorsKey = tmp.CorsKey
 	c.EnableQUIC = tmp.EnableQUIC
+	c.LogToParquet = tmp.LogToParquet
+	c.ParquetDir = tmp.ParquetDir
+	c.ParquetLogIPs = tmp.ParquetLogIPs
+	if c.ParquetDir == "" {
+		c.ParquetDir = "data"
+	}
 	return nil
 }
 
@@ -232,4 +245,7 @@ func (c *Config) MakeDefault() {
 	c.HTTPRedirect = "https://tls.peet.ws"
 	c.CorsKey = "X-CORS"
 	c.EnableQUIC = true
+	c.LogToParquet = false
+	c.ParquetDir = "data"
+	c.ParquetLogIPs = false
 }

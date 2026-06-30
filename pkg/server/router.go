@@ -41,6 +41,8 @@ func Router(path string, res types.Response, srv *Server) ([]byte, string, error
 		Log(fmt.Sprintf("%v %v %v %v %v", cleanIP(res.IP), res.Method, res.HTTPVersion, res.Path, "-"))
 	}
 
+	srv.LogParquet(res)
+
 	u, err := url.Parse("https://tls.peet.ws" + path)
 	var m map[string][]string
 	if err != nil || u == nil {

@@ -16,13 +16,13 @@ import (
 	"sync"
 	"time"
 
-	pq "github.com/parquet-go/parquet-go"
 	"github.com/pagpeter/trackme/pkg/types"
+	pq "github.com/parquet-go/parquet-go"
 )
 
-// Row is the flat schema written to Parquet. It captures the useful fingerprints
-// rather than the full nested Response (whose extension list does not map cleanly
-// onto a columnar schema).
+// Row is the schema written to Parquet. It captures the useful fingerprints
+// rather than the full nested Response (whose TLS extension list does not map
+// cleanly onto a columnar schema).
 type Row struct {
 	Timestamp     int64  `parquet:"timestamp"`
 	IP            string `parquet:"ip"`
@@ -38,6 +38,58 @@ type Row struct {
 	PeetPrintHash string `parquet:"peetprint_hash"`
 	Akamai        string `parquet:"akamai"`
 	AkamaiHash    string `parquet:"akamai_hash"`
+	// Headers is the request's headers in the order they were sent on the wire,
+	// each formatted as "name: value".
+	Headers []string `parquet:"headers"`
+	// TCPIP holds the full TCP/IP fingerprint, when one was captured for the IP.
+	TCPIP TCPIP `parquet:"tcpip"`
+}
+
+// TCPIP mirrors types.TCPIPDetails with Parquet-friendly column names.
+type TCPIP struct {
+	CapLen    int32   `parquet:"cap_length"`
+	DstPort   int32   `parquet:"dst_port"`
+	SrcPort   int32   `parquet:"src_port"`
+	HeaderLen int32   `parquet:"header_length"`
+	TS        []int32 `parquet:"ts"`
+	IP        IP      `parquet:"ip"`
+	TCP       TCP     `parquet:"tcp"`
+}
+
+// IP mirrors types.IPDetails.
+type IP struct {
+	DF          int32  `parquet:"df"`
+	HDRLength   int32  `parquet:"hdr_length"`
+	ID          int32  `parquet:"id"`
+	MF          int32  `parquet:"mf"`
+	NXT         int32  `parquet:"nxt"`
+	OFF         int32  `parquet:"off"`
+	PLEN        int32  `parquet:"plen"`
+	Protocol    int32  `parquet:"protocol"`
+	RF          int32  `parquet:"rf"`
+	TOS         int32  `parquet:"tos"`
+	TotalLength int32  `parquet:"total_length"`
+	TTL         int32  `parquet:"ttl"`
+	IPVersion   int32  `parquet:"ip_version"`
+	DstIp       string `parquet:"dst_ip"`
+	SrcIP       string `parquet:"src_ip"`
+}
+
+// TCP mirrors types.TCPDetails.
+type TCP struct {
+	Ack                int32  `parquet:"ack"`
+	Checksum           int32  `parquet:"checksum"`
+	Flags              int32  `parquet:"flags"`
+	HeaderLength       int32  `parquet:"header_length"`
+	MSS                int32  `parquet:"mss"`
+	OFF                int32  `parquet:"off"`
+	Options            string `parquet:"options"`
+	OptionsOrder       string `parquet:"options_order"`
+	Seq                int32  `parquet:"seq"`
+	Timestamp          int32  `parquet:"timestamp"`
+	TimestampEchoReply int32  `parquet:"timestamp_echo_reply"`
+	URP                int32  `parquet:"urp"`
+	Window             int32  `parquet:"window"`
 }
 
 const (
@@ -45,14 +97,16 @@ const (
 	// them. Dropping (rather than blocking) keeps request handling fast even if
 	// disk writes stall.
 	channelBuffer = 4096
-	// batchSize triggers a flush once this many rows have accumulated.
-	batchSize = 1_000_000
-	// flushInterval forces a flush of any buffered rows even when batchSize is
-	// not reached, so low-traffic data is not held in memory indefinitely.
-	flushInterval = 24 * time.Hour
+	// batchSize triggers a row-group flush once this many rows have accumulated.
+	batchSize = 500
+	// flushInterval forces a row-group flush even when batchSize is not reached,
+	// so low-traffic data lands on disk without waiting for shutdown.
+	flushInterval = 3 * time.Minute
 )
 
-// Logger persists Rows to Parquet files in a directory.
+// Logger persists Rows to a single Parquet file per run. Row groups are
+// flushed periodically so data reaches disk without waiting for shutdown, but
+// the file footer (needed for readers) is only written on Close.
 type Logger struct {
 	dir    string
 	logIPs bool
@@ -132,7 +186,79 @@ func rowFromResponse(res types.Response, logIPs bool) Row {
 		row.Akamai = res.Http3.AkamaiFingerprint
 		row.AkamaiHash = res.Http3.AkamaiFingerprintHash
 	}
+	row.Headers = orderedHeaders(res)
+	row.TCPIP = tcpipFromResponse(res.TCPIP)
 	return row
+}
+
+// orderedHeaders returns the request headers in the order they were sent, as
+// "name: value" strings, regardless of the protocol version.
+func orderedHeaders(res types.Response) []string {
+	switch res.HTTPVersion {
+	case "h2":
+		if res.Http2 != nil {
+			for _, f := range res.Http2.SendFrames {
+				if f.Type == "HEADERS" && len(f.Headers) > 0 {
+					return f.Headers
+				}
+			}
+		}
+	case "h3":
+		if res.Http3 != nil {
+			return res.Http3.Headers
+		}
+	default:
+		if res.Http1 != nil {
+			return res.Http1.Headers
+		}
+	}
+	return nil
+}
+
+func tcpipFromResponse(d types.TCPIPDetails) TCPIP {
+	ts := make([]int32, len(d.TS))
+	for i, v := range d.TS {
+		ts[i] = int32(v)
+	}
+	return TCPIP{
+		CapLen:    int32(d.CapLen),
+		DstPort:   int32(d.DstPort),
+		SrcPort:   int32(d.SrcPort),
+		HeaderLen: int32(d.HeaderLen),
+		TS:        ts,
+		IP: IP{
+			DF:          int32(d.IP.DF),
+			HDRLength:   int32(d.IP.HDRLength),
+			ID:          int32(d.IP.ID),
+			MF:          int32(d.IP.MF),
+			NXT:         int32(d.IP.NXT),
+			OFF:         int32(d.IP.OFF),
+			PLEN:        int32(d.IP.PLEN),
+			Protocol:    int32(d.IP.Protocol),
+			RF:          int32(d.IP.RF),
+			TOS:         int32(d.IP.TOS),
+			TotalLength: int32(d.IP.TotalLength),
+			TTL:         int32(d.IP.TTL),
+			IPVersion:   int32(d.IP.IPVersion),
+			DstIp:       d.IP.DstIp,
+			SrcIP:       d.IP.SrcIP,
+		},
+		TCP: TCP{
+			Ack:                int32(d.TCP.Ack),
+			Checksum:           int32(d.TCP.Checksum),
+			Flags:              int32(d.TCP.Flags),
+			HeaderLength:       int32(d.TCP.HeaderLength),
+			MSS:                int32(d.TCP.MSS),
+			OFF:                int32(d.TCP.OFF),
+			Options:            d.TCP.Options,
+			OptionsOrder:       d.TCP.OptionsOrder,
+			Seq:                int32(d.TCP.Seq),
+			Timestamp:          int32(d.TCP.Timestamp),
+			TimestampEchoReply: int32(d.TCP.TimestampEchoReply),
+			URP:                int32(d.TCP.URP),
+			Window:             int32(d.TCP.Window),
+		},
+	}
 }
 
 func (l *Logger) run() {
@@ -141,15 +267,39 @@ func (l *Logger) run() {
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
 
-	// Grow on demand rather than reserving batchSize rows up front, since
-	// batchSize is large and most deployments will flush on the timer.
-	buf := make([]Row, 0, 4096)
-	flush := func() {
+	buf := make([]Row, 0, batchSize)
+
+	// Open a single file for this run; close it on exit.
+	name := fmt.Sprintf("trackme-%d.parquet", time.Now().UnixNano())
+	path := filepath.Join(l.dir, name)
+	f, err := os.Create(path)
+	if err != nil {
+		log.Println("parquet: failed to create file:", err)
+		return
+	}
+	w := pq.NewGenericWriter[Row](f, pq.Compression(&pq.Snappy))
+
+	closeWriter := func() {
+		if err := w.Close(); err != nil {
+			log.Println("parquet: failed to close writer:", err)
+		}
+		if err := f.Close(); err != nil {
+			log.Println("parquet: failed to close file:", err)
+		}
+	}
+	defer closeWriter()
+
+	// flushRowGroup writes buffered rows as a row group and clears the buffer.
+	// The file footer is not written until closeWriter, so the file is not yet
+	// readable by external tools — but the row-group bytes are on disk.
+	flushRowGroup := func() {
 		if len(buf) == 0 {
 			return
 		}
-		if err := l.writeFile(buf); err != nil {
-			log.Println("parquet: failed to write file:", err)
+		if _, err := w.Write(buf); err != nil {
+			log.Println("parquet: failed to write rows:", err)
+		} else if err := w.Flush(); err != nil {
+			log.Println("parquet: failed to flush row group:", err)
 		}
 		buf = buf[:0]
 	}
@@ -159,56 +309,20 @@ func (l *Logger) run() {
 		case row := <-l.ch:
 			buf = append(buf, row)
 			if len(buf) >= batchSize {
-				flush()
+				flushRowGroup()
 			}
 		case <-ticker.C:
-			flush()
+			flushRowGroup()
 		case <-l.done:
-			// Drain anything still queued, then flush and exit.
 			for {
 				select {
 				case row := <-l.ch:
 					buf = append(buf, row)
 				default:
-					flush()
+					flushRowGroup()
 					return
 				}
 			}
 		}
 	}
-}
-
-// writeFile writes a batch of rows to a new Parquet file. The file is written to
-// a temporary name first and renamed on success so readers never observe a
-// partially written file.
-func (l *Logger) writeFile(rows []Row) error {
-	name := fmt.Sprintf("trackme-%d.parquet", time.Now().UnixNano())
-	final := filepath.Join(l.dir, name)
-	tmp := final + ".tmp"
-
-	f, err := os.Create(tmp)
-	if err != nil {
-		return fmt.Errorf("create %q: %w", tmp, err)
-	}
-
-	w := pq.NewGenericWriter[Row](f, pq.Compression(&pq.Snappy))
-	if _, err := w.Write(rows); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return fmt.Errorf("write rows: %w", err)
-	}
-	if err := w.Close(); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return fmt.Errorf("close writer: %w", err)
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("close file: %w", err)
-	}
-	if err := os.Rename(tmp, final); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("rename %q: %w", tmp, err)
-	}
-	return nil
 }

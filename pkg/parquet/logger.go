@@ -24,22 +24,17 @@ import (
 // rather than the full nested Response (whose TLS extension list does not map
 // cleanly onto a columnar schema).
 type Row struct {
-	Timestamp     int64  `parquet:"timestamp"`
-	IP            string `parquet:"ip"`
-	HTTPVersion   string `parquet:"http_version"`
-	Method        string `parquet:"method"`
-	Path          string `parquet:"path"`
-	UserAgent     string `parquet:"user_agent"`
-	JA3           string `parquet:"ja3"`
-	JA3Hash       string `parquet:"ja3_hash"`
-	JA4           string `parquet:"ja4"`
-	JA4R          string `parquet:"ja4_r"`
-	PeetPrint     string `parquet:"peetprint"`
-	PeetPrintHash string `parquet:"peetprint_hash"`
-	Akamai        string `parquet:"akamai"`
-	AkamaiHash    string `parquet:"akamai_hash"`
-	// Headers is the request's headers in the order they were sent on the wire,
-	// each formatted as "name: value".
+	Timestamp   int64  `parquet:"timestamp"`
+	IP          string `parquet:"ip"`
+	HTTPVersion string `parquet:"http_version"`
+	Method      string `parquet:"method"`
+	Path        string `parquet:"path"`
+	JA3         string `parquet:"ja3"`
+	JA4         string `parquet:"ja4"`
+	JA4R        string `parquet:"ja4_r"`
+	PeetPrint   string `parquet:"peetprint"`
+	Akamai      string `parquet:"akamai"`
+	// Headers holds the request headers in wire order, each as "name: value".
 	Headers []string `parquet:"headers"`
 	// TCPIP holds the full TCP/IP fingerprint, when one was captured for the IP.
 	TCPIP TCPIP `parquet:"tcpip"`
@@ -166,25 +161,20 @@ func rowFromResponse(res types.Response, logIPs bool) Row {
 		HTTPVersion: res.HTTPVersion,
 		Method:      res.Method,
 		Path:        res.Path,
-		UserAgent:   res.UserAgent,
 	}
 	if logIPs {
 		row.IP = res.IP
 	}
 	if res.TLS != nil {
 		row.JA3 = res.TLS.JA3
-		row.JA3Hash = res.TLS.JA3Hash
 		row.JA4 = res.TLS.JA4
 		row.JA4R = res.TLS.JA4_r
 		row.PeetPrint = res.TLS.PeetPrint
-		row.PeetPrintHash = res.TLS.PeetPrintHash
 	}
 	if res.HTTPVersion == "h2" && res.Http2 != nil {
 		row.Akamai = res.Http2.AkamaiFingerprint
-		row.AkamaiHash = res.Http2.AkamaiFingerprintHash
 	} else if res.HTTPVersion == "h3" && res.Http3 != nil {
 		row.Akamai = res.Http3.AkamaiFingerprint
-		row.AkamaiHash = res.Http3.AkamaiFingerprintHash
 	}
 	row.Headers = orderedHeaders(res)
 	row.TCPIP = tcpipFromResponse(res.TCPIP)

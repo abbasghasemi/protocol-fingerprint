@@ -26,7 +26,7 @@ func Router(path string, res types.Response, srv *Server) ([]byte, string, error
 	if v, ok := srv.GetTCPFingerprints().Load(res.IP); ok {
 		res.TCPIP = v.(types.TCPIPDetails)
 	}
-	res.Time = time.Now().UTC().Format("2006/01/02T15:04:05.000'Z'")
+	res.Time = time.Now().UTC().Format("2006/01/02T15:04:05.000Z")
 	if res.TLS != nil {
 		// Use QUIC JA4 for HTTP/3 connections
 		if res.HTTPVersion == "h3" {
@@ -65,10 +65,17 @@ func Router(path string, res types.Response, srv *Server) ([]byte, string, error
             rawJSONArray := "[" + strings.Join(msg, ",") + "]"
             return []byte(rawJSONArray), "application/json", nil
         }
+        if u.Path == "/favicon.ico" {
+            b, err := utils.ReadFile("static/favicon.ico")
+            if err != nil {
+                return []byte{}, "text/html", nil
+            }
+            return []byte(b), "image/x-icon", nil
+        }
         if srv.GetConfig().LogToDb {
             recordResponse(u.Path, res)
         }
-        apiAll(res, m)
+        return apiAll(res, m)
     }
     if (true) {
        return []byte{}, "text/html", nil

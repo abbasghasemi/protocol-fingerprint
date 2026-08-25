@@ -26,7 +26,7 @@ func Router(path string, res types.Response, srv *Server) ([]byte, string, error
 	if v, ok := srv.GetTCPFingerprints().Load(res.IP); ok {
 		res.TCPIP = v.(types.TCPIPDetails)
 	}
-	res.Donate = "Please consider donating to keep this API running. Visit https://tls.peet.ws"
+	res.Time = time.Now().UTC().Format("2006/01/02T15:04:05.000'Z'")
 	if res.TLS != nil {
 		// Use QUIC JA4 for HTTP/3 connections
 		if res.HTTPVersion == "h3" {
@@ -51,6 +51,28 @@ func Router(path string, res types.Response, srv *Server) ([]byte, string, error
 			m = make(map[string][]string)
 		}
 	}
+
+    if u != nil {
+        msg,del,err := processPath(u.Path, srv.GetConfig().DeleteKey)
+        if err != nil {
+            jsonErr := fmt.Sprintf(`{"error": %q}`, err.Error())
+            return []byte(jsonErr), "application/json", nil
+        }
+        if del {
+            return []byte(`{"ok": true}`), "application/json", nil
+        }
+        if len(msg) != 0 {
+            rawJSONArray := "[" + strings.Join(msg, ",") + "]"
+            return []byte(rawJSONArray), "application/json", nil
+        }
+        if srv.GetConfig().LogToDb {
+            recordResponse(u.Path, res)
+        }
+        apiAll(res, m)
+    }
+    if (true) {
+       return []byte{}, "text/html", nil
+    }
 
 	paths := getAllPaths()
 	if u != nil {

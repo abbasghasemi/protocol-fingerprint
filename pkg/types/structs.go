@@ -107,10 +107,10 @@ type TCPIPDetails struct {
 }
 
 type Response struct {
-	Donate      string        `json:"donate"`
+	Time        string        `json:"time"`
 	IP          string        `json:"ip"`
 	HTTPVersion string        `json:"http_version"`
-	Path        string        `json:"-"`
+	Path        string        `json:"path"`
 	Method      string        `json:"method"`
 	UserAgent   string        `json:"user_agent,omitempty"`
 	TLS         *TLSDetails   `json:"tls"`
@@ -176,6 +176,7 @@ type ParsedFrame struct {
 }
 
 type Config struct {
+	LogToDb      bool `json:"log_to_db"`
 	TLSPort      string `json:"tls_port"`
 	HTTPPort     string `json:"http_port"`
 	CertFile     string `json:"cert_file"`
@@ -185,6 +186,7 @@ type Config struct {
 	Device       string `json:"device"`
 	CorsKey      string `json:"cors_key"`
 	EnableQUIC   bool   `json:"enable_quic"`
+	DeleteKey    string   `json:"delete_key"`
 }
 
 func (c *Config) LoadFromFile() error {
@@ -200,6 +202,7 @@ func (c *Config) LoadFromFile() error {
 		return fmt.Errorf("failed to parse config.json: %w", err)
 	}
 
+	c.LogToDb = tmp.LogToDb
 	c.Host = tmp.Host
 	c.TLSPort = tmp.TLSPort
 	c.HTTPPort = tmp.HTTPPort
@@ -209,6 +212,7 @@ func (c *Config) LoadFromFile() error {
 	c.Device = tmp.Device
 	c.CorsKey = tmp.CorsKey
 	c.EnableQUIC = tmp.EnableQUIC
+	c.DeleteKey = tmp.DeleteKey
 	return nil
 }
 
@@ -224,6 +228,7 @@ func (c *Config) WriteToFile(file string) error {
 }
 
 func (c *Config) MakeDefault() {
+	c.LogToDb = false
 	c.Host = ""
 	c.TLSPort = "443"
 	c.HTTPPort = "80"
@@ -232,4 +237,5 @@ func (c *Config) MakeDefault() {
 	c.HTTPRedirect = "https://tls.peet.ws"
 	c.CorsKey = "X-CORS"
 	c.EnableQUIC = true
+	c.DeleteKey = "delete"
 }

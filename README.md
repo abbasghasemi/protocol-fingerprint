@@ -78,39 +78,17 @@ GREASE-772-771|2-1.1|GREASE-29-23-24|1027-2052-1025-1283-2053-1281-2054-1537|1|2
 
 The site exposes a lot of different API endpoints.
 
-### /api/all
+### /any-path
 
 Returns all of the collected data about an request
 
-### /api/tls
+### /show/{any-path}|{id}
 
-Returns only the TLS data
+Returns records
 
-### /api/clean
+### /{delete_key}/all|{count}
 
-Returns only the different fingerprints (akamai-fp+ja3)
-
-### /api/request-count
-
-Returns the total request count the database captured. Only works when connected to a database.
-
-### /api/search-ja3
-
-Param: `?by=<ja3>`
-
-Returns the most seen other identifiers (user-agent, h2, peetprint) that were seen together with this identifier. Only works when connected to a database.
-
-### /api/search-h2
-
-Param: `?by=<akamai-fp>`
-
-Returns the most seen other identifiers (user-agent, JA3, peetprint) that were seen together with this identifier. Only works when connected to a database.
-
-### /api/search-peetprint
-
-Param: `?by=<peetprint>`
-
-Returns the most seen other identifiers (user-agent, h2, JA3) that were seen together with this identifier. Only works when connected to a database.
+Delete records
 
 ## Docker
 

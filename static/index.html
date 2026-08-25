@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A small website and API to show off server-side tracking technology, that also provides an API for TLS (JA3) and HTTP/2 fingerprinting"
+    />
+    <meta
+      name="keywords"
+      content="JA3, JA4, TCP fingerprinting, JA4 fingerprinting api, tls fingerprinting, http2 fingerprinting, akamai fingerprinting, cloudflare fingerprinting, bypass ja3, spoof ja3"
+    />
+    <meta name="og:site_name" content="TrackMe - Fingerprinting API" />
+    <meta charset="utf-8" />
+    <title>TrackMe | Home</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      * {
+        transition-property: all;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 150ms;
+      }
+    </style>
+    <script>
+      const insert = (data) => {
+        d = document;
+
+        let groups = [];
+        let protos = [];
+        let versions = [];
+        data.tls.extensions.forEach((ext) => {
+          if (ext.name == "supported_groups (10)") {
+            groups = ext.supported_groups;
+          } else if (
+            ext.name == "application_layer_protocol_negotiation (16)"
+          ) {
+            protos = ext.protocols;
+          } else if (ext.name == "supported_versions (43)") {
+            ext.versions.forEach((elem) => {
+              if (!elem.startsWith("TLS_GREASE")) versions.push(elem);
+            });
+          }
+        });
+
+        d.getElementById("ja3-hash").innerText = data.tls.ja3_hash;
+        d.getElementById("ja3").innerText = data.tls.ja3;
+
+        d.getElementById("ja4").innerText = data.tls.ja4;
+
+        d.getElementById("ttl").innerText = data.tcpip?.ip?.ttl || "-";
+
+        d.getElementById("akamai-hash").innerText =
+          data.http3?.akamai_fingerprint_hash || data.http2?.akamai_fingerprint_hash || "-";
+        d.getElementById("akamai").innerText =
+          data.http3?.akamai_fingerprint || data.http2?.akamai_fingerprint || "-";
+        // Update Akamai label based on protocol
+        if (data.http_version == "h3") {
+          d.getElementById("akamai-label").innerText = "Akamai HTTP/3 fingerprint";
+        } else if (data.http_version == "h2") {
+          d.getElementById("akamai-label").innerText = "Akamai HTTP/2 fingerprint";
+        } else {
+          d.getElementById("akamai-label").innerText = "Akamai HTTP fingerprint";
+        }
+
+        d.getElementById("peetprint-hash").innerText = data.tls.peetprint_hash;
+        d.getElementById("peetprint").innerText = data.tls.peetprint;
+
+        d.getElementById("tls-version").innerText =
+          data.tls.tls_version_negotiated;
+        d.getElementById("http-version").innerText =
+          data.http_version == "h3" ? "HTTP/3" : (data.http_version == "h2" ? "HTTP/2" : "HTTP/1.1");
+        d.getElementById("tls-versions").innerText = versions.join(", ");
+        d.getElementById("http-versions").innerText = protos.join(", ");
+        if (data.http_version == "h2" && data.http2) {
+          d.getElementById("h2-frames").innerText = data.http2.sent_frames.length;
+        } else if (data.http_version == "h3" && data.http3) {
+          d.getElementById("h2-frames").innerText = data.http3.settings?.length || "N/A";
+          d.getElementById("h2-frames-label").innerText = "HTTP/3 settings";
+        } else {
+          d.getElementById("h2-frames").innerText = "N/A";
+        }
+
+        // Cipher suites
+        cipherTable = d.getElementById("cipher-suites");
+        data.tls.ciphers.forEach((suite, i) => {
+          cipherTable.insertRow(i + 1).innerHTML = `<td>${suite}</td>`;
+        });
+
+        // tls extensions
+        extTable = d.getElementById("tls-extensions");
+        data.tls.extensions.forEach((ext, i) => {
+          extTable.insertRow(i + 1).innerHTML = `<td>${
+            ext.name || "0x" + ext.Type
+          }</td>`;
+        });
+
+        // tls curves
+        curveTable = d.getElementById("tls-curves");
+        groups.forEach((curve, i) => {
+          curveTable.insertRow(i + 1).innerHTML = `<td>${curve}</td>`;
+        });
+      };
+
+      const toggleTheme = () => {
+        const html = document.querySelector("html");
+        const theme = html.getAttribute("data-theme");
+        if (theme === "dark") {
+          html.setAttribute("data-theme", "light");
+        } else {
+          html.setAttribute("data-theme", "dark");
+        }
+      };
+
+      const track = () => insert(/*DATA*/)
+    </script>
+  </head>
+
+  <body class="m-5 dark:bg-gray-800 dark:text-gray-50" onload="track()">
+    <h1 class="text-4xl mb-3 font-black">TrackMe - fingerprinting API</h1>
+
+    <h2 class="text-2xl pt-5">Your fingerprints</h2>
+    <hr class="pb-5" />
+
+    <div class="flex flex-wrap">
+      <a
+        class="bg-gray-100 dark:bg-gray-900 rounded-md shadow p-3 m-3 hover:bg-gray-50 dark:hover:bg-black min-w-fit max-w-full grow"
+      >
+        <h2 class="font-bold">JA3</h2>
+        <p class="text-2xl break-all" id="ja3-hash">Loading...</p>
+        <p class="text-sm break-all" id="ja3">Loading...</p>
+      </a>
+      <div
+        class="bg-gray-100 dark:bg-gray-900 rounded-md shadow p-3 m-3 hover:bg-gray-50 dark:hover:bg-black min-w-fit max-w-full grow"
+      >
+        <h2 class="font-bold">JA4</h2>
+        <p class="text-2xl break-all" id="ja4">Loading...</p>
+    </div>
+      <a
+        class="bg-gray-100 dark:bg-gray-900 rounded-md shadow p-3 m-3 hover:bg-gray-50 dark:hover:bg-black min-w-fit max-w-full grow"
+      >
+        <h2 class="font-bold" id="akamai-label">Akamai HTTP fingerprint</h2>
+        <p class="text-2xl break-all" id="akamai-hash">Loading...</p>
+        <p class="text-sm break-all" id="akamai">Loading...</p>
+      </a>
+      <a
+        class="bg-gray-100 dark:bg-gray-900 rounded-md shadow p-3 m-3 hover:bg-gray-50 dark:hover:bg-black min-w-fit max-w-full grow"
+      >
+        <h2 class="font-bold">PeetPrint</h2>
+        <p class="text-2xl break-all" id="peetprint-hash">Loading...</p>
+        <p class="text-sm break-all" id="peetprint">Loading...</p>
+      </a>
+    </div>
+
+    <h2 class="text-2xl pt-5">Request details</h2>
+    <hr class="pb-5" />
+
+    <div class="flex flex-wrap">
+      <div
+        class="bg-blue-100 dark:bg-blue-900 dark:hover:bg-blue-800 rounded-md shadow p-3 m-3 hover:bg-blue-50 min-w-fit grow"
+        onclick="CopyToClipboard('tls-version')"
+      >
+        <h2 class="font-bold">Used TLS</h2>
+        <p class="text-2xl" id="tls-version">Loading...</p>
+      </div>
+      <div
+        class="bg-red-100 dark:bg-red-900 dark:hover:bg-red-800 rounded-md shadow p-3 m-3 hover:bg-red-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">Used HTTP</h2>
+        <p class="text-2xl" id="http-version">Loading...</p>
+      </div>
+      <div
+        class="bg-green-100 dark:bg-green-900 dark:hover:bg-green-800 rounded-md shadow p-3 m-3 hover:bg-green-50 min-w-fit grow"
+      >
+        <h2 class="font-bold" id="h2-frames-label">Total http/2 frames</h2>
+        <p class="text-2xl" id="h2-frames">Loading...</p>
+      </div>
+      <div
+        class="bg-sky-100 dark:bg-sky-900 dark:hover:bg-sky-800 rounded-md shadow p-3 m-3 hover:bg-sky-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">Supported HTTP</h2>
+        <p class="text-2xl" id="http-versions">Loading...</p>
+      </div>
+      <div
+        class="bg-violet-100 dark:bg-violet-900 dark:hover:bg-violet-800 rounded-md shadow p-3 m-3 hover:bg-violet-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">Supported TLS</h2>
+        <p class="text-2xl" id="tls-versions">Loading...</p>
+      </div>
+        <div
+        class="bg-yellow-100 dark:bg-yellow-900 dark:hover:bg-yellow-800 rounded-md shadow p-3 m-3 hover:bg-violet-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">IP TTL</h2>
+        <p class="text-2xl" id="ttl">Loading...</p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap">
+      <div
+        class="bg-gray-100 dark:bg-gray-900 rounded-md shadow p-3 m-3 hover:bg-gray-50 dark:hover:bg-black min-w-fit grow"
+      >
+        <table class="table-auto" id="cipher-suites">
+          <thead>
+            <th>TLS cipher suites</th>
+          </thead>
+        </table>
+      </div>
+      <div
+        class="bg-gray-100 dark:bg-gray-900 rounded-md shadow p-3 m-3 hover:bg-gray-50 dark:hover:bg-black min-w-fit grow"
+      >
+        <table class="table-auto" id="tls-extensions">
+          <thead>
+            <th>TLS extensions</th>
+          </thead>
+        </table>
+      </div>
+      <div
+        class="bg-gray-100 dark:bg-gray-900 rounded-md shadow p-3 m-3 hover:bg-gray-50 dark:hover:bg-black min-w-fit"
+      >
+        <table class="table-auto" id="tls-curves">
+          <thead>
+            <th>TLS curves</th>
+          </thead>
+        </table>
+      </div>
+    </div>
+
+    <h2 class="text-2xl pt-5">Other useful sites</h2>
+    <hr class="pb-5" />
+
+    <ul>
+      <li>
+        <a href="https://github.com/wwhtrbbtt/TrackMe">Source code</a>
+      </li>
+      <li>
+        <a href="https://en-academic.com/dic.nsf/enwiki/868408"
+          >TCP/IP stack fingerprinting</a
+        >
+      </li>
+      <li>
+        <a href="https://en.wikipedia.org/wiki/TCP/IP_stack_fingerprinting"
+          >TCP fingerprinting wikipedia (german version is better)</a
+        >
+      </li>
+      <li>
+        <a
+          href="https://engineering.salesforce.com/tls-fingerprinting-with-ja3-and-ja3s-247362855967/"
+          >JA3 explanation - Salesforce</a
+        >
+      </li>
+            <li>
+        <a
+          href="https://www.foxio.io/"
+          >JA4 explanation - FoxIO</a
+        >
+      </li>
+      <li>
+        <a href="https://github.com/bogdanfinn/tls-client/"
+          >HTTP client to bypass fingerprinting</a
+        >
+      </li>
+      <li>
+        <a href="https://http2-explained.haxx.se/en/part1"
+          >HTTP2 Explained - haxx.se</a
+        >
+      </li>
+      <li>
+        <a href="https://kronoz.dev/articles/tls"
+          >A very simple article about TLS</a
+        >
+      </li>
+      <li>
+        <a
+          href="https://lwthiker.com/networks/2022/06/17/http2-fingerprinting.html"
+          >HTTP2 Fingerprinting - lwthiker</a
+        >
+      </li>
+      <li>
+        <a
+          href="https://lwthiker.com/networks/2022/06/17/tls-fingerprinting.html"
+          >TLS fingerprinting - lwthiker</a
+        >
+      </li>
+      <li>
+        <a href="https://privacycheck.sec.lrz.de/passive/fp_h2/fp_http2.html"
+          >Fingerprinting HTTP2 - privacycheck.sec.lrz.de</a
+        >
+      </li>
+      <li>
+        <a href="https://tls13.xargs.org/">TLS 1.3, every byte explained</a>
+      </li>
+      <li>
+        <a
+          href="https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf"
+          >Akamai - HTTP2 fingerprinting</a
+        >
+      </li>
+      <li>
+        <a
+          href="https://www.fastly.com/blog/the-state-of-tls-fingerprinting-whats-working-what-isnt-and-whats-next"
+          >State of TLS fingerprinting - fastly</a
+        >
+      </li>
+    </ul>
+
+    <h2 class="text-2xl pt-5">API endpoints</h2>
+    <hr class="pb-5" />
+    <div class="flex flex-wrap">
+      <div
+        class="bg-blue-100 dark:bg-blue-900 dark:hover:bg-blue-800 rounded-md shadow p-3 m-3 hover:bg-blue-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">All of the information</h2>
+        <a href="/api/all" class="text-xl break-all">/api/all</a>
+      </div>
+      <div
+        class="bg-yellow-100 dark:bg-sky-900 dark:hover:bg-sky-800 rounded-md shadow p-3 m-3 hover:bg-yellow-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">Only fingerprints</h2>
+        <a href="/api/clean" class="text-xl break-all">/api/clean</a>
+      </div>
+
+      <div
+        class="bg-yellow-100 dark:bg-sky-900 dark:hover:bg-sky-800 rounded-md shadow p-3 m-3 hover:bg-yellow-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">Only TLS data</h2>
+        <a href="/api/tls" class="text-xl break-all">/api/tls</a>
+      </div>
+    </div>
+
+    <h2 class="text-2xl pt-5">Donate</h2>
+    <hr class="pb-5" />
+    <p>
+      This API is free for you, but cost's me money and time to operate. If you
+      find it useful, please consider donating via crypto.
+    </p>
+    <div class="flex flex-wrap">
+      <div
+        class="bg-blue-100 dark:bg-yellow-900 dark:hover:bg-yellow-800 rounded-md shadow p-3 m-3 hover:bg-yellow-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">Buy me a coffee</h2>
+        <p class="text-xl break-all" id="buymeacoffee">
+          <a href="https://www.buymeacoffee.com/peeet"> @peeet </a>
+        </p>
+      </div>
+      <div
+        class="bg-blue-100 dark:bg-blue-900 dark:hover:bg-blue-800 rounded-md shadow p-3 m-3 hover:bg-blue-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">Bitcoin (BTC)</h2>
+        <p class="text-xl break-all" id="btc">
+          bc1qc2av8uc7fdzr9696uqcqtdf2hl25rgmnvm9ys4
+        </p>
+      </div>
+      <div
+        class="bg-red-100 dark:bg-red-900 dark:hover:bg-red-800 rounded-md shadow p-3 m-3 hover:bg-red-50 min-w-fit grow"
+        data-clipboard-target="#sol"
+      >
+        <h2 class="font-bold">Solana (SOL)</h2>
+        <p class="text-xl break-all" id="sol">
+          DCCuNLirA9hXPHJGmCVhrkG6Kh4E2w8Bu6HHnXLbm78L
+        </p>
+      </div>
+      <div
+        class="bg-green-100 dark:bg-green-900 dark:hover:bg-green-800 rounded-md shadow p-3 m-3 hover:bg-green-50 min-w-fit grow"
+        data-clipboard-target="#eth"
+      >
+        <h2 class="font-bold">Ethereum (ETH)</h2>
+        <p class="text-xl break-all" id="eth">
+          0x3dEe894fd880816b1205dE915A00a42c85C44502
+        </p>
+      </div>
+
+      <div
+        class="copy bg-violet-100 dark:bg-violet-900 dark:hover:bg-violet-800 rounded-md shadow p-3 m-3 hover:bg-violet-50 min-w-fit grow"
+        data-clipboard-target="#xmr"
+      >
+        <h2 class="font-bold">Monero (XMR)</h2>
+        <p class="text-xl break-all" id="xmr">
+          45jQVd3NnUxPVqDxqdYzA9hbfUDfygLhTiSY1c9mjiYEKL2YcLk4G9E48mRpA2Nd3m4hLxqwy8Y6TBJaAjAiyFazK5SpV1g
+        </p>
+      </div>
+    </div>
+
+    <h2 class="text-2xl pt-5">Contact</h2>
+    <hr class="pb-5" />
+    <p>Please don't contact me for general programming help.</p>
+    <div class="flex flex-wrap">
+      <div
+        class="bg-blue-100 dark:bg-blue-900 dark:hover:bg-blue-800 rounded-md shadow p-3 m-3 hover:bg-blue-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">Discord</h2>
+        <p class="text-xl break-all">@.peeet.</p>
+      </div>
+      <div
+        class="bg-yellow-100 dark:bg-sky-900 dark:hover:bg-sky-800 rounded-md shadow p-3 m-3 hover:bg-yellow-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">E-Mail</h2>
+        <p class="text-xl break-all">tls@peet.ws</p>
+      </div>
+      <div
+        class="bg-red-100 dark:bg-sky-900 dark:hover:bg-sky-800 rounded-md shadow p-3 m-3 hover:bg-yellow-50 min-w-fit grow"
+      >
+        <h2 class="font-bold">Portfolio</h2>
+        <a href="https://peet.ws" class="text-xl break-all">peet.ws</p>
+      </div>
+    </div>
+  </body>
+</html>

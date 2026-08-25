@@ -1,0 +1,15 @@
+*.zip
+*.key
+*.pem
+*.crt
+certs/
+main
+TrackMe
+.DS_Store
+requests-db/
+config.json
+.idea
+adminKey
+crashes.txt
+cmd/cmd
+tmp

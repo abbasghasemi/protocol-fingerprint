@@ -175,18 +175,23 @@ type ParsedFrame struct {
 	GoAway    *GoAway   `json:"goaway,omitempty"`
 }
 
+type Certs struct {
+    Host    string `json:"host"`
+    File    string `json:"file"`
+}
+
 type Config struct {
-	LogToDb      bool `json:"log_to_db"`
-	TLSPort      string `json:"tls_port"`
-	HTTPPort     string `json:"http_port"`
-	CertFile     string `json:"cert_file"`
-	KeyFile      string `json:"key_file"`
-	Host         string `json:"host"`
-	HTTPRedirect string `json:"http_redirect"`
-	Device       string `json:"device"`
-	CorsKey      string `json:"cors_key"`
-	EnableQUIC   bool   `json:"enable_quic"`
-	DeleteKey    string   `json:"delete_key"`
+	LogToDb      bool       `json:"log_to_db"`
+	TLSPort      string     `json:"tls_port"`
+	HTTPPort     string     `json:"http_port"`
+	Certs        []Certs    `json:"certs"`
+	KeyFile      string     `json:"key_file"`
+	Host         string     `json:"host"`
+	HTTPRedirect string     `json:"http_redirect"`
+	Device       string     `json:"device"`
+	CorsKey      string     `json:"cors_key"`
+	EnableQUIC   bool       `json:"enable_quic"`
+	DeleteKey    string     `json:"delete_key"`
 }
 
 func (c *Config) LoadFromFile() error {
@@ -206,7 +211,7 @@ func (c *Config) LoadFromFile() error {
 	c.Host = tmp.Host
 	c.TLSPort = tmp.TLSPort
 	c.HTTPPort = tmp.HTTPPort
-	c.CertFile = tmp.CertFile
+	c.Certs = tmp.Certs
 	c.KeyFile = tmp.KeyFile
 	c.HTTPRedirect = tmp.HTTPRedirect
 	c.Device = tmp.Device
@@ -232,7 +237,12 @@ func (c *Config) MakeDefault() {
 	c.Host = ""
 	c.TLSPort = "443"
 	c.HTTPPort = "80"
-	c.CertFile = "certs/chain.pem"
+	c.Certs = []Certs {
+	   {
+	        Host: "global",
+       	    File: "certs/global.pem",
+	   },
+	}
 	c.KeyFile = "certs/key.pem"
 	c.HTTPRedirect = "https://tls.peet.ws"
 	c.CorsKey = "X-CORS"

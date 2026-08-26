@@ -1,11 +1,4 @@
 // Package parquet persists captured request fingerprints to Parquet files.
-//
-// The logger is intentionally non-blocking: request handlers hand off rows over
-// a buffered channel and a single background goroutine batches them into rolling
-// Parquet files. Each flush produces a new file (data/trackme-<unixnano>.parquet),
-// which keeps the writer simple (Parquet files are immutable once their footer is
-// written) and yields a directory of files that analytics tools read as one
-// dataset.
 package parquet
 
 import (
@@ -46,9 +39,10 @@ type TCPIP struct {
 	DstPort   int32   `parquet:"dst_port"`
 	SrcPort   int32   `parquet:"src_port"`
 	HeaderLen int32   `parquet:"header_length"`
-	TS        []int32 `parquet:"ts"`
+	TS        []int64 `parquet:"ts"`
 	IP        IP      `parquet:"ip"`
 	TCP       TCP     `parquet:"tcp"`
+	P0F       string  `parquet:"p0f"`
 }
 
 // IP mirrors types.IPDetails.
@@ -72,19 +66,19 @@ type IP struct {
 
 // TCP mirrors types.TCPDetails.
 type TCP struct {
-	Ack                int32  `parquet:"ack"`
-	Checksum           int32  `parquet:"checksum"`
-	Flags              int32  `parquet:"flags"`
-	HeaderLength       int32  `parquet:"header_length"`
-	MSS                int32  `parquet:"mss"`
-	OFF                int32  `parquet:"off"`
+	Ack                int64  `parquet:"ack"`
+	Checksum           int64  `parquet:"checksum"`
+	Flags              int64  `parquet:"flags"`
+	HeaderLength       int64  `parquet:"header_length"`
+	MSS                int64  `parquet:"mss"`
+	OFF                int64  `parquet:"off"`
 	Options            string `parquet:"options"`
 	OptionsOrder       string `parquet:"options_order"`
-	Seq                int32  `parquet:"seq"`
-	Timestamp          int32  `parquet:"timestamp"`
-	TimestampEchoReply int32  `parquet:"timestamp_echo_reply"`
-	URP                int32  `parquet:"urp"`
-	Window             int32  `parquet:"window"`
+	Seq                int64  `parquet:"seq"`
+	Timestamp          int64  `parquet:"timestamp"`
+	TimestampEchoReply int64  `parquet:"timestamp_echo_reply"`
+	URP                int64  `parquet:"urp"`
+	Window             int64  `parquet:"window"`
 }
 
 const (
@@ -177,7 +171,7 @@ func rowFromResponse(res types.Response, logIPs bool) Row {
 		row.Akamai = res.Http3.AkamaiFingerprint
 	}
 	row.Headers = orderedHeaders(res)
-	row.TCPIP = tcpipFromResponse(res.TCPIP)
+	row.TCPIP = tcpipFromResponse(res.TCPIP, logIPs)
 	return row
 }
 
@@ -205,17 +199,18 @@ func orderedHeaders(res types.Response) []string {
 	return nil
 }
 
-func tcpipFromResponse(d types.TCPIPDetails) TCPIP {
-	ts := make([]int32, len(d.TS))
+func tcpipFromResponse(d types.TCPIPDetails, logIPs bool) TCPIP {
+	ts := make([]int64, len(d.TS))
 	for i, v := range d.TS {
-		ts[i] = int32(v)
+		ts[i] = int64(v)
 	}
-	return TCPIP{
+	result := TCPIP{
 		CapLen:    int32(d.CapLen),
 		DstPort:   int32(d.DstPort),
 		SrcPort:   int32(d.SrcPort),
 		HeaderLen: int32(d.HeaderLen),
 		TS:        ts,
+		P0F:       d.P0F,
 		IP: IP{
 			DF:          int32(d.IP.DF),
 			HDRLength:   int32(d.IP.HDRLength),
@@ -230,25 +225,28 @@ func tcpipFromResponse(d types.TCPIPDetails) TCPIP {
 			TotalLength: int32(d.IP.TotalLength),
 			TTL:         int32(d.IP.TTL),
 			IPVersion:   int32(d.IP.IPVersion),
-			DstIp:       d.IP.DstIp,
-			SrcIP:       d.IP.SrcIP,
 		},
 		TCP: TCP{
-			Ack:                int32(d.TCP.Ack),
-			Checksum:           int32(d.TCP.Checksum),
-			Flags:              int32(d.TCP.Flags),
-			HeaderLength:       int32(d.TCP.HeaderLength),
-			MSS:                int32(d.TCP.MSS),
-			OFF:                int32(d.TCP.OFF),
+			Ack:                int64(d.TCP.Ack),
+			Checksum:           int64(d.TCP.Checksum),
+			Flags:              int64(d.TCP.Flags),
+			HeaderLength:       int64(d.TCP.HeaderLength),
+			MSS:                int64(d.TCP.MSS),
+			OFF:                int64(d.TCP.OFF),
 			Options:            d.TCP.Options,
 			OptionsOrder:       d.TCP.OptionsOrder,
-			Seq:                int32(d.TCP.Seq),
-			Timestamp:          int32(d.TCP.Timestamp),
-			TimestampEchoReply: int32(d.TCP.TimestampEchoReply),
-			URP:                int32(d.TCP.URP),
-			Window:             int32(d.TCP.Window),
+			Seq:                int64(d.TCP.Seq),
+			Timestamp:          int64(d.TCP.Timestamp),
+			TimestampEchoReply: int64(d.TCP.TimestampEchoReply),
+			URP:                int64(d.TCP.URP),
+			Window:             int64(d.TCP.Window),
 		},
 	}
+	if logIPs {
+		result.IP.DstIp = d.IP.DstIp
+		result.IP.SrcIP = d.IP.SrcIP
+	}
+	return result
 }
 
 func (l *Logger) run() {

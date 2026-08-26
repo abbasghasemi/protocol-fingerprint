@@ -116,29 +116,6 @@ Param: `?by=<peetprint>`
 
 Returns the most seen other identifiers (user-agent, h2, JA3) that were seen together with this identifier. Only works when connected to a database.
 
-## Logging to Parquet
-
-TrackMe can persist the fingerprints it captures to [Apache Parquet](https://parquet.apache.org/) files for later analysis. Enable it in `config.json`:
-
-```json
-{
-  "log_to_parquet": true,
-  "parquet_dir": "data",
-  "parquet_log_ips": false
-}
-```
-
-- `log_to_parquet`: turns the Parquet sink on/off.
-- `parquet_dir`: directory the files are written to (created if missing, defaults to `data`).
-- `parquet_log_ips`: when `false` (default) the client IP column is left empty.
-
-Each captured request is written as a row with the timestamp, HTTP version, method, path, user-agent and the JA3 / JA4 / PeetPrint / Akamai fingerprints (and their hashes). Rows are buffered and flushed to a new `trackme-<timestamp>.parquet` file every 1,000,000 rows or once a day, whichever comes first — so the directory becomes a Parquet dataset you can query with DuckDB, pandas, Spark, etc.:
-
-```sql
--- DuckDB
-SELECT ja3_hash, count(*) FROM 'data/*.parquet' GROUP BY ja3_hash ORDER BY 2 DESC;
-```
-
 ## Docker
 
 You can also run the server in a docker container using docker-compose.

@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"strconv"
@@ -55,13 +56,43 @@ func SniffTCP(device string, tlsPort int, srv *server.Server) {
 		log.Fatal(err)
 	}
 	defer handle.Close()
+	if err := handle.SetBPFFilter(fmt.Sprintf("tcp and dst port %d", tlsPort)); err != nil {
+		log.Printf("failed to install TCP capture filter: %v", err)
+	}
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	for packet := range packetSource.Packets() {
+	packets := packetSource.Packets()
+	pruneTicker := time.NewTicker(time.Minute)
+	defer pruneTicker.Stop()
+
+	for {
+		var packet gopacket.Packet
+		select {
+		case nextPacket, ok := <-packets:
+			if !ok {
+				return
+			}
+			packet = nextPacket
+		case <-pruneTicker.C:
+			srv.PruneTCPSyn(time.Now().Add(-2 * time.Minute))
+			continue
+		}
+
 		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 			ip := parseIP(packet)
 			tcp := tcpLayer.(*layers.TCP)
-			if !tcp.ACK || int(tcp.DstPort) != tlsPort || ip.IPVersion == 0 {
+			if int(tcp.DstPort) != tlsPort || ip == nil || ip.IPVersion == 0 {
+				continue
+			}
+
+			src := net.JoinHostPort(ip.SrcIP, strconv.Itoa(int(tcp.SrcPort)))
+			if tcp.SYN && !tcp.ACK {
+				if syn, p0f, ok := parseTCPSyn(packet, tcp); ok {
+					srv.StoreTCPSyn(src, syn, p0f)
+				}
+				continue
+			}
+			if !tcp.ACK {
 				continue
 			}
 
@@ -79,7 +110,6 @@ func SniffTCP(device string, tlsPort int, srv *server.Server) {
 					Window:       int(tcp.Window),
 				},
 			}
-			src := net.JoinHostPort(pack.IP.SrcIP, strconv.Itoa(pack.SrcPort))
 			srv.GetTCPFingerprints().Store(src, pack)
 		}
 	}

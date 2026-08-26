@@ -8,11 +8,18 @@ import (
 	"github.com/pagpeter/trackme/pkg/types"
 )
 
+const (
+	maxTCPSynFingerprints = 10_000
+	tcpSynFingerprintTTL  = 10 * time.Second
+)
+
 // State holds all the global state previously scattered across the application
 type State struct {
 	Config             *types.Config
 	TCPFingerprints    sync.Map
 	TCPSynFingerprints sync.Map
+	tcpSynSlots        chan struct{}
+	tcpSynTTL          time.Duration
 	Local              bool
 }
 
@@ -20,6 +27,7 @@ type storedTCPSyn struct {
 	details    types.TCPSynDetails
 	p0f        string
 	capturedAt time.Time
+	expiresAt  time.Time
 }
 
 // Server provides access to shared state and functionality
@@ -29,11 +37,17 @@ type Server struct {
 
 // NewServer creates a new server instance with initialized state
 func NewServer() *Server {
+	return newServerWithTCPSynLimits(maxTCPSynFingerprints, tcpSynFingerprintTTL)
+}
+
+func newServerWithTCPSynLimits(limit int, ttl time.Duration) *Server {
 	return &Server{
 		State: &State{
 			Config:             &types.Config{},
 			TCPFingerprints:    sync.Map{},
 			TCPSynFingerprints: sync.Map{},
+			tcpSynSlots:        make(chan struct{}, limit),
+			tcpSynTTL:          ttl,
 		},
 	}
 }
@@ -51,11 +65,30 @@ func (s *Server) GetTCPFingerprints() *sync.Map {
 // StoreTCPSyn records an inbound SYN under the same remote-address string that
 // net.Conn.RemoteAddr returns, allowing the HTTP handler to claim it later.
 func (s *Server) StoreTCPSyn(remoteAddr string, details types.TCPSynDetails, p0f string) {
-	// Preserve the first SYN when the client retransmits the same connection.
-	s.State.TCPSynFingerprints.LoadOrStore(remoteAddr, &storedTCPSyn{
+	select {
+	case s.State.tcpSynSlots <- struct{}{}:
+	default:
+		return
+	}
+
+	now := time.Now()
+	stored := &storedTCPSyn{
 		details:    details,
 		p0f:        p0f,
-		capturedAt: time.Now(),
+		capturedAt: now,
+		expiresAt:  now.Add(s.State.tcpSynTTL),
+	}
+
+	// Preserve the first SYN when the client retransmits the same connection.
+	if _, loaded := s.State.TCPSynFingerprints.LoadOrStore(remoteAddr, stored); loaded {
+		s.releaseTCPSynSlot()
+		return
+	}
+
+	time.AfterFunc(s.State.tcpSynTTL, func() {
+		if s.State.TCPSynFingerprints.CompareAndDelete(remoteAddr, stored) {
+			s.releaseTCPSynSlot()
+		}
 	})
 }
 
@@ -65,8 +98,9 @@ func (s *Server) TakeTCPSyn(remoteAddr string) (types.TCPSynDetails, string, boo
 	if !ok {
 		return types.TCPSynDetails{}, "", false
 	}
+	s.releaseTCPSynSlot()
 	stored, ok := v.(*storedTCPSyn)
-	if !ok {
+	if !ok || time.Now().After(stored.expiresAt) {
 		return types.TCPSynDetails{}, "", false
 	}
 	return stored.details, stored.p0f, true
@@ -78,10 +112,19 @@ func (s *Server) PruneTCPSyn(before time.Time) {
 	s.State.TCPSynFingerprints.Range(func(key, value any) bool {
 		stored, ok := value.(*storedTCPSyn)
 		if !ok || stored.capturedAt.Before(before) {
-			s.State.TCPSynFingerprints.CompareAndDelete(key, value)
+			if s.State.TCPSynFingerprints.CompareAndDelete(key, value) {
+				s.releaseTCPSynSlot()
+			}
 		}
 		return true
 	})
+}
+
+func (s *Server) releaseTCPSynSlot() {
+	select {
+	case <-s.State.tcpSynSlots:
+	default:
+	}
 }
 
 // GetAdmin returns the CORS key configuration

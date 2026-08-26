@@ -62,19 +62,9 @@ func SniffTCP(device string, tlsPort int, srv *server.Server) {
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	packets := packetSource.Packets()
-	pruneTicker := time.NewTicker(time.Minute)
-	defer pruneTicker.Stop()
 
-	for {
-		var packet gopacket.Packet
-		select {
-		case nextPacket, ok := <-packets:
-			if !ok {
-				return
-			}
-			packet = nextPacket
-		case <-pruneTicker.C:
-			srv.PruneTCPSyn(time.Now().Add(-2 * time.Minute))
+	for packet := range packets {
+		if packet == nil {
 			continue
 		}
 

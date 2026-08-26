@@ -1,10 +1,12 @@
 package server
 
 import (
+	"log"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/pagpeter/trackme/pkg/parquet"
 	"github.com/pagpeter/trackme/pkg/types"
 )
 
@@ -21,6 +23,7 @@ type State struct {
 	tcpSynSlots        chan struct{}
 	tcpSynTTL          time.Duration
 	Local              bool
+	Parquet            *parquet.Logger
 }
 
 type storedTCPSyn struct {
@@ -55,6 +58,31 @@ func newServerWithTCPSynLimits(limit int, ttl time.Duration) *Server {
 // GetConfig returns the loaded configuration
 func (s *Server) GetConfig() *types.Config {
 	return s.State.Config
+}
+
+// InitParquet starts the Parquet logger if enabled in the config. It must be
+// called after the config has been loaded.
+func (s *Server) InitParquet() {
+	if !s.State.Config.LogToParquet {
+		return
+	}
+	l, err := parquet.New(s.State.Config.ParquetDir, s.State.Config.ParquetLogIPs)
+	if err != nil {
+		log.Println("Failed to start parquet logger:", err)
+		return
+	}
+	s.State.Parquet = l
+	log.Println("Logging captured fingerprints to parquet dir:", s.State.Config.ParquetDir)
+}
+
+// LogParquet persists a captured response if the Parquet logger is enabled.
+func (s *Server) LogParquet(res types.Response) {
+	s.State.Parquet.Log(res)
+}
+
+// CloseParquet flushes and stops the Parquet logger.
+func (s *Server) CloseParquet() {
+	s.State.Parquet.Close()
 }
 
 // GetTCPFingerprints returns the TCP fingerprints map

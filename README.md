@@ -90,6 +90,46 @@ Returns records
 
 Delete records
 
+## Base api
+
+### /api/all
+
+Returns all of the collected data about an request
+
+When packet capture is enabled with `device`, `tcpip` also contains the initial
+inbound TCP SYN as `tcp_syn` and a raw p0f-format signature as
+`p0f`.
+
+### /api/tls
+
+Returns only the TLS data
+
+### /api/clean
+
+Returns only the different fingerprints (akamai-fp+ja3)
+
+### /api/request-count
+
+Returns the total request count the database captured. Only works when connected to a database.
+
+### /api/search-ja3
+
+Param: `?by=<ja3>`
+
+Returns the most seen other identifiers (user-agent, h2, peetprint) that were seen together with this identifier. Only works when connected to a database.
+
+### /api/search-h2
+
+Param: `?by=<akamai-fp>`
+
+Returns the most seen other identifiers (user-agent, JA3, peetprint) that were seen together with this identifier. Only works when connected to a database.
+
+### /api/search-peetprint
+
+Param: `?by=<peetprint>`
+
+Returns the most seen other identifiers (user-agent, h2, JA3) that were seen together with this identifier. Only works when connected to a database.
+
 ## Docker
 
 You can also run the server in a docker container using docker-compose.

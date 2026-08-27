@@ -29,6 +29,10 @@ func Router(path string, res types.Response, srv *Server) ([]byte, string, error
 		res.TCPIP = v.(types.TCPIPDetails)
 	}
 	res.Time = time.Now().UTC().Format("2006/01/02T15:04:05.000Z")
+	if syn, p0f, ok := srv.TakeTCPSyn(res.IP); ok {
+		res.TCPIP.TCPSyn = &syn
+		res.TCPIP.P0F = p0f
+	}
 	if res.TLS != nil {
 		// Use QUIC JA4 for HTTP/3 connections
 		if res.HTTPVersion == "h3" {
@@ -42,6 +46,8 @@ func Router(path string, res types.Response, srv *Server) ([]byte, string, error
 	} else {
 		Log(fmt.Sprintf("%v %v %v %v %v", cleanIP(res.IP), res.Method, res.HTTPVersion, res.Path, "-"))
 	}
+
+	srv.LogParquet(res)
 
 	u, err := url.Parse("https://tls.peet.ws" + path)
 	var m map[string][]string

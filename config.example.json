@@ -14,5 +14,8 @@
   "device": "eth0",
   "cors_key": "X-CORS",
   "enable_quic": true,
-  "delete_key": "delete"
+  "delete_key": "delete",
+  "log_to_parquet": false,
+  "parquet_dir": "data",
+  "parquet_log_ips": false
 }

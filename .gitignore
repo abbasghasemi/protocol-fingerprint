@@ -8,6 +8,8 @@ TrackMe
 .DS_Store
 requests-db/
 *.fpr
+data/
+*.parquet
 config.json
 .idea
 adminKey

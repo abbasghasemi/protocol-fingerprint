@@ -133,7 +133,7 @@ type TCPSynDetails struct {
 }
 
 type Response struct {
-	Donate      string        `json:"donate"`
+	Time        string        `json:"time"`
 	IP          string        `json:"ip"`
 	HTTPVersion string        `json:"http_version"`
 	Path        string        `json:"-"`
@@ -201,16 +201,23 @@ type ParsedFrame struct {
 	GoAway    *GoAway   `json:"goaway,omitempty"`
 }
 
+type Certs struct {
+    Host    string `json:"host"`
+    File    string `json:"file"`
+}
+
 type Config struct {
+	LogToDb      bool   `json:"log_to_db"`
 	TLSPort      string `json:"tls_port"`
 	HTTPPort     string `json:"http_port"`
-	CertFile     string `json:"cert_file"`
+	Certs        []Certs    `json:"certs"`
 	KeyFile      string `json:"key_file"`
 	Host         string `json:"host"`
 	HTTPRedirect string `json:"http_redirect"`
 	Device       string `json:"device"`
 	CorsKey      string `json:"cors_key"`
 	EnableQUIC   bool   `json:"enable_quic"`
+	DeleteKey    string     `json:"delete_key"`
 
 	// LogToParquet enables persisting captured fingerprints to Parquet files.
 	LogToParquet bool `json:"log_to_parquet"`
@@ -233,15 +240,17 @@ func (c *Config) LoadFromFile() error {
 		return fmt.Errorf("failed to parse config.json: %w", err)
 	}
 
+	c.LogToDb = tmp.LogToDb
 	c.Host = tmp.Host
 	c.TLSPort = tmp.TLSPort
 	c.HTTPPort = tmp.HTTPPort
-	c.CertFile = tmp.CertFile
+	c.Certs = tmp.Certs
 	c.KeyFile = tmp.KeyFile
 	c.HTTPRedirect = tmp.HTTPRedirect
 	c.Device = tmp.Device
 	c.CorsKey = tmp.CorsKey
 	c.EnableQUIC = tmp.EnableQUIC
+	c.DeleteKey = tmp.DeleteKey
 	c.LogToParquet = tmp.LogToParquet
 	c.ParquetDir = tmp.ParquetDir
 	c.ParquetLogIPs = tmp.ParquetLogIPs
@@ -263,14 +272,21 @@ func (c *Config) WriteToFile(file string) error {
 }
 
 func (c *Config) MakeDefault() {
+	c.LogToDb = false
 	c.Host = ""
 	c.TLSPort = "443"
 	c.HTTPPort = "80"
-	c.CertFile = "certs/chain.pem"
+	c.Certs = []Certs {
+	   {
+	        Host: "global",
+       	    File: "certs/global.pem",
+	   },
+	}
 	c.KeyFile = "certs/key.pem"
 	c.HTTPRedirect = "https://tls.peet.ws"
 	c.CorsKey = "X-CORS"
 	c.EnableQUIC = true
+	c.DeleteKey = "delete"
 	c.LogToParquet = false
 	c.ParquetDir = "data"
 	c.ParquetLogIPs = false

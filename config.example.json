@@ -1,13 +1,20 @@
 {
+  "log_to_db": false,
   "tls_port": "443",
   "http_port": "80",
-  "cert_file": "certs/chain.pem",
+  "certs": [
+    {
+      "host": "global",
+      "file": "certs/chain.pem"
+    }
+  ],
   "key_file": "certs/key.pem",
   "host": "0.0.0.0",
   "http_redirect": "https://tls.peet.ws",
   "device": "eth0",
   "cors_key": "X-CORS",
   "enable_quic": true,
+  "delete_key": "delete",
   "log_to_parquet": false,
   "parquet_dir": "data",
   "parquet_log_ips": false

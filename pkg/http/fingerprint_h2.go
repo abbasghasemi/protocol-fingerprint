@@ -2,7 +2,6 @@ package http
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/pagpeter/trackme/pkg/types"
@@ -35,18 +34,7 @@ func getSettingsFingerprint(frames []types.ParsedFrame) string {
 				if len(parts) != 2 {
 					return "error"
 				}
-				settingID := mapping[parts[0]]
-				if settingID == "" && strings.HasPrefix(parts[0], "UNKNOWN_SETTING_") {
-					rawID := strings.TrimPrefix(parts[0], "UNKNOWN_SETTING_")
-					if _, err := strconv.ParseUint(rawID, 10, 16); err != nil {
-						return "error"
-					}
-					settingID = rawID
-				}
-				if settingID == "" {
-					return "error"
-				}
-				sf += settingID + ":" + parts[1] + ";"
+				sf += mapping[parts[0]] + ":" + parts[1] + ";"
 			}
 			break
 		}

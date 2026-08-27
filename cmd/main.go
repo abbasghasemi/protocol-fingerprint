@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+	"strings"
 
 	"github.com/pagpeter/quic-go"
 	"github.com/pagpeter/quic-go/http3"
@@ -25,6 +26,11 @@ var cert tls.Certificate
 var utlsCert utls.Certificate
 var srv *server.Server
 var local = false
+
+type LoadedCert struct {
+    Host string
+    Cert utls.Certificate
+}
 
 func logCrash(r interface{}) {
 	crashInfo := fmt.Sprintf("PANIC: %v\n", r)
@@ -146,27 +152,55 @@ func main() {
 	log.Println("Listening on " + srv.GetConfig().Host + ":" + srv.GetConfig().TLSPort)
 
 	// Load the TLS certificates
-	var err error
-	cert, err = tls.LoadX509KeyPair(srv.GetConfig().CertFile, srv.GetConfig().KeyFile)
-	if err != nil {
-		log.Fatal("Error loading TLS certificates", err)
+	certs := srv.GetConfig().Certs
+	if len(certs) == 0 {
+	     log.Fatalf("Error certs can not be empty")
 	}
+    var loadedCerts []LoadedCert
+    for _, item := range certs {
+        cert, err := tls.LoadX509KeyPair(
+            item.File,
+            srv.GetConfig().KeyFile,
+        )
+        if err != nil {
+            log.Fatalf("Error loading TLS certificates for %s: %v", item.Host, err)
+        }
 
-	// Convert standard TLS cert to utls cert
-	utlsCert = utls.Certificate{
-		Certificate: cert.Certificate,
-		PrivateKey:  cert.PrivateKey,
-		Leaf:        cert.Leaf,
-	}
+        utlsCert = utls.Certificate{
+            Certificate: cert.Certificate,
+            PrivateKey:  cert.PrivateKey,
+            Leaf:        cert.Leaf,
+        }
+        loadedCerts = append(loadedCerts, LoadedCert{
+            Host: strings.ToLower(item.Host),
+            Cert: utlsCert,
+        })
+    }
 
-	// Create a TLS configuration
-	config := utls.Config{
-		ServerName: srv.GetConfig().Host,
-		NextProtos: []string{
-			"h2",
-		},
-		Certificates: []utls.Certificate{utlsCert},
-	}
+    config := utls.Config {
+//         ServerName: srv.GetConfig().Host,
+        NextProtos: []string {
+            "h2",
+        },
+        GetCertificate: func(hello *utls.ClientHelloInfo) (*utls.Certificate, error) {
+            sni := strings.ToLower(
+                strings.TrimSuffix(hello.ServerName, "."),
+            )
+            log.Printf("SNI received: %q", sni)
+            for i := range loadedCerts {
+                host := loadedCerts[i].Host
+                if sni == host || strings.HasSuffix(sni, "."+host) {
+                    log.Printf(
+                        "Certificate matched: SNI=%q Host=%q",
+                        sni,
+                        host,
+                    )
+                    return &loadedCerts[i].Cert, nil
+                }
+            }
+            return &loadedCerts[0].Cert, nil
+        },
+    }
 
 	listener, err := utls.Listen("tcp", srv.GetConfig().Host+":"+srv.GetConfig().TLSPort, &config)
 	if err != nil {

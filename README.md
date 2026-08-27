@@ -78,6 +78,20 @@ GREASE-772-771|2-1.1|GREASE-29-23-24|1027-2052-1025-1283-2053-1281-2054-1537|1|2
 
 The site exposes a lot of different API endpoints.
 
+### /any-path
+
+Returns all of the collected data about an request
+
+### /show/{any-path}|{id}
+
+Returns records
+
+### /{delete_key}/all|{count}
+
+Delete records
+
+## Base api
+
 ### /api/all
 
 Returns all of the collected data about an request

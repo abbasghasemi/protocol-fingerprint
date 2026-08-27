@@ -1,5 +1,7 @@
 FROM golang:1.24-alpine
 
+ENV GOPROXY=https://goproxy.cn,direct
+
 RUN apk add build-base
 RUN apk add libpcap-dev
 WORKDIR /app

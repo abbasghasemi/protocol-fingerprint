@@ -48,7 +48,7 @@ func recordResponse(path string, resp types.Response) error {
 	if err != nil {
 		return err
 	}
-    sum := md5.Sum([]byte(string([]rune(path)[1:])))
+    sum := md5.Sum([]byte(string([]rune(path)[:])))
 	hash := hex.EncodeToString(sum[:])
 	line := hash + string(data) + "\n"
 
@@ -67,16 +67,13 @@ func processPath(path string, deleteKey string) ([]string, bool, error) {
 
 	if strings.HasPrefix(path, "/show/") {
 		arg := strings.TrimPrefix(path, "/show/")
-		if arg == "" {
-			return nil,false, errors.New("missing show argument")
-		}
-
 		if lineNum, err := strconv.Atoi(arg); err == nil {
 			if lineNum < 1 {
 				return nil,false, errors.New("row ID must be >= 1")
 			}
 			return readSpecificRow(filePath, lineNum)
 		}
+        arg = "/" + arg
         sum := md5.Sum([]byte(arg))
 		targetHash := hex.EncodeToString(sum[:])
 		return findByHash(filePath, targetHash)

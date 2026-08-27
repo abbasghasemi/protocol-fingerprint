@@ -110,7 +110,7 @@ type Response struct {
 	Time        string        `json:"time"`
 	IP          string        `json:"ip"`
 	HTTPVersion string        `json:"http_version"`
-	Path        string        `json:"path"`
+	Path        string        `json:"-"`
 	Method      string        `json:"method"`
 	UserAgent   string        `json:"user_agent,omitempty"`
 	TLS         *TLSDetails   `json:"tls"`

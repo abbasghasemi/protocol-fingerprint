@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -63,7 +65,12 @@ func Router(path string, res types.Response, srv *Server) ([]byte, string, error
         }
         if len(msg) != 0 {
             rawJSONArray := "[" + strings.Join(msg, ",") + "]"
-            return []byte(rawJSONArray), "application/json", nil
+            var prettyJSON bytes.Buffer
+            err := json.Indent(&prettyJSON, []byte(rawJSONArray), "", "  ")
+            if err != nil {
+                return []byte{},"",fmt.Errorf("Error json syntax:", err)
+            }
+            return []byte(prettyJSON.String()), "application/json", nil
         }
         if u.Path == "/favicon.ico" {
             b, err := utils.ReadFile("static/favicon.ico")

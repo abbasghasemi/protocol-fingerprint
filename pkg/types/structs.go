@@ -208,6 +208,7 @@ type Certs struct {
 
 type Config struct {
 	LogToDb      bool   `json:"log_to_db"`
+	ResponseNest bool   `json:"response_nest"`
 	TLSPort      string `json:"tls_port"`
 	HTTPPort     string `json:"http_port"`
 	Certs        []Certs    `json:"certs"`
@@ -241,6 +242,7 @@ func (c *Config) LoadFromFile() error {
 	}
 
 	c.LogToDb = tmp.LogToDb
+	c.ResponseNest = tmp.ResponseNest
 	c.Host = tmp.Host
 	c.TLSPort = tmp.TLSPort
 	c.HTTPPort = tmp.HTTPPort
@@ -273,6 +275,7 @@ func (c *Config) WriteToFile(file string) error {
 
 func (c *Config) MakeDefault() {
 	c.LogToDb = false
+	c.ResponseNest = false
 	c.Host = ""
 	c.TLSPort = "443"
 	c.HTTPPort = "80"

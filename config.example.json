@@ -1,5 +1,6 @@
 {
   "log_to_db": false,
+  "response_nest": false,
   "tls_port": "443",
   "http_port": "80",
   "certs": [

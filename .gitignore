@@ -16,3 +16,4 @@ adminKey
 crashes.txt
 cmd/cmd
 tmp
+static/test/

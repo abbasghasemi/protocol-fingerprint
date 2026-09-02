@@ -88,6 +88,13 @@ func Router(path string, res types.Response, srv *Server) ([]byte, string, error
         if srv.GetConfig().LogToDb {
             recordResponse(u.Path, res)
         }
+        if srv.GetConfig().ResponseNest {
+            response,err := findResponse(u.Path)
+            if err != nil {
+                return []byte{},"",err
+            }
+            return response.Body,response.ContentType,nil
+        }
         return apiAll(res, m)
     }
     if (true) {
